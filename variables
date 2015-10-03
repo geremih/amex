@@ -1,0 +1,35 @@
+Citizen_ID	Citizen ID
+actual_vote	Party voted for in current elections (only in the training dataset)
+previous_vote	Party voted for in previous elections
+d_centaur	Donations to party Centaur
+d_ebony	Donations to party Ebony
+d_tokugawa	Donations to party Tokugawa
+d_odyssey	Donations to party Odyssey
+d_cosmos	Donations to party Cosmos
+s_centaur	# shares to party Centaur
+s_ebony	# shares to party Ebony
+s_tokugawa	# shares to party Tokugawa
+s_cosmos	# shares to party Cosmos
+s_odyssey	# shares to party Odyssey
+occ	Occupation of the citizen
+region	Region Code 
+h_size	Average Household Size
+age	Age Bucket
+married Married Indicator
+home	Home Ownership Indicator
+politics	Number of Political Affiliations
+r_years	Number of years since residing at current address
+p_voted	Percentage of elections voted in from all elections eligible to vote in
+n_unique_p Number of unique parties voted for in historical elections
+education	Education background
+n_centaur	# of Centaur rallies attended
+n_ebony	# of Ebony rallies attended
+n_tokugawa	# of Tokugawa rallies attended
+n_odyssey	# of Odyssey rallies attended
+n_rallies	Total Rally Visits (All Parties)
+n_cosmos	# of Cosmos rallies attended
+docs	Additional documents the Citizen possesses, besides the voter ID
+income	Primary Income
+
+
+[Citizen_ID, actual_vote, previous_vote, d_centaur, d_ebony, d_tokugawa, d_odyssey, d_cosmos, s_centaur, s_ebony, s_tokugawa, s_cosmos, s_odyssey, occ, region, h_size, age, married, home, politics, r_years, p_voted, n_unique_p, education, n_centaur, n_ebony, n_tokugawa, n_odyssey, n_rallies, n_cosmos, docs, income]
