@@ -41,9 +41,10 @@ def testing(model):
     tf = pd.read_csv('testing.csv')
     tf = clean_testing(tf)
     X = get_features(tf)
-    an = model.predict(X)
-    citizen_ids = tf['Citizen_ID']
-    return (citizen_ids,an) 
+    t = model.predict(X)
+    ids = tf['Citizen_ID']
+    t = [categories[i] for i in t]
+    pd.DataFrame({'y': t},index=ids).to_csv('alpha_kappa_iit_kgp_2.csv')
 
 def metric(X,y):
     # evaluate the model by splitting into train and test sets
@@ -57,7 +58,6 @@ def metric(X,y):
 
     # generate evaluation metrics
     print 'metrics.accuracy_score(y_test, predicted) = %s' %(metrics.accuracy_score(y_test, predicted))
-    print 'metrics.roc_auc_score(y_test, predicted) = %s' %(metrics.roc_auc_score(y_test, predicted))
 
 
     #evaluate the model using 10-fold cross-validation
@@ -82,14 +82,9 @@ X = get_features(df)
 print 'X.shape = %s  y.shape = %s' %(X.shape,y.shape)
 model = LogisticRegression()
 model = model.fit(X, y)
+print model.score(X, y)
 
-ids, t = testing(model)
-t = [categories[i] for i in t]
 
-print len(ids), len(t)
-pd.DataFrame({'y': t},index=ids).to_csv('alpha_kappa_iit_kgp_2.csv')
 
-# print model.score(X, y)
-# metric(X,y)
-   
- 
+metric(X,y)
+#testing(model)
