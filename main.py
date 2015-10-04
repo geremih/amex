@@ -12,11 +12,12 @@ from sklearn.ensemble import RandomForestClassifier as Forest
 import xgboost as xgb
 
 def clean_helper(df):
-    for column in ['p_voted','n_unique_p','d_centaur', 'd_ebony', 'd_tokugawa', 'd_odyssey', 'd_cosmos', 's_centaur', 's_ebony', 's_tokugawa', 's_cosmos', 's_odyssey',  'n_centaur', 'n_ebony', 'n_tokugawa', 'n_odyssey', 'n_rallies', 'n_cosmos', 'docs'] :
-        df[column] = df[column].fillna(0)
-
     for column in ['d_centaur', 'd_ebony', 'd_tokugawa', 'd_odyssey', 'd_cosmos']:
         df[column] = df[column].str.rstrip().str.replace(',','').str.replace('$','').astype(int)
+    df.interpolate()
+#    for column in ['p_voted','n_unique_p','d_centaur', 'd_ebony', 'd_tokugawa', 'd_odyssey', 'd_cosmos', 's_centaur', 's_ebony', 's_tokugawa', 's_cosmos', 's_odyssey',  'n_centaur', 'n_ebony', 'n_tokugawa', 'n_odyssey', 'n_rallies', 'n_cosmos', 'docs'] :
+#        ave = df[column].mean()
+#        df[column] = df[column].fillna(ave)
     df['p_centaur'] = (df['previous_vote'] == 'CENTAUR').astype(int)
     df['p_ebony'] = (df['previous_vote'] ==  'EBONY').astype(int)
     df['p_tokugawa'] = (df['previous_vote'] == 'TOKUGAWA').astype(int)
@@ -113,7 +114,7 @@ def get_model():
 #    return LogisticRegression()
 #    return svm.SVC()
 #    return GradientBoostingClassifier(n_estimators=200, max_depth=4)
-    return xgb.XGBClassifier(max_depth = 4, n_estimators=200)
+    return xgb.XGBClassifier(max_depth = 5, n_estimators=400, learning_rate=0.05)
 
 
 def testing(model):
