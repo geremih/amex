@@ -43,8 +43,8 @@ def encode_onehot(df, cols):
 
 def preprocess(df):
 
-
     df['income=na'] = (df['income']==np.nan).astype(int)
+
     df = df.fillna(0)
 
 #    df = df.set_index('Citizen_ID')
@@ -63,7 +63,8 @@ def get_model():
 #    return LogisticRegression()
 #    return svm.SVC()
 #    return GradientBoostingClassifier(n_estimators=200, max_depth=4,learning_rate=.05)
-    return xgb.XGBClassifier(learning_rate=.05, n_estimators=400, max_depth=4)
+    #best has occured at 0.05 and 400
+    return xgb.XGBClassifier(learning_rate=.05, n_estimators=400, max_depth=4, subsample=.9)
 #    return RandomForestClassifier(n_estimators=200)
 #    return ExtraTreesClassifier()
 
