@@ -55,8 +55,6 @@ def preprocess(df):
     one_hot = ['age', 'previous_vote', 'education', 'region','occ']
     df = encode_onehot(df, one_hot)
 
-    df['n_donations'] = df['d_centaur'] + df['d_ebony'] + df['d_tokugawa'] + df['d_odyssey'] + df['d_cosmos']
-    df['n_shares'] = df['s_centaur'] + df['s_ebony'] + df['s_tokugawa'] + df['s_odyssey'] + df['s_cosmos']
 
     #Remove $ and ,    
     return df
