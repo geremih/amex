@@ -15,6 +15,8 @@ from sklearn import svm
 from sklearn.ensemble import GradientBoostingClassifier
 from sklearn.linear_model import RidgeClassifier
 import pickle
+from sklearn.grid_search import GridSearchCV, RandomizedSearchCV
+from scipy.stats import uniform
 def encode_onehot(df, cols):
     """
     One-hot encoding is applied to columns specified in a pandas DataFrame.
@@ -43,8 +45,6 @@ def encode_onehot(df, cols):
 
 def preprocess(df):
 
-    df['income=na'] = (df['income']==np.nan).astype(int)
-
     df = df.fillna(0)
 
 #    df = df.set_index('Citizen_ID')
@@ -59,14 +59,6 @@ def preprocess(df):
     #Remove $ and ,    
     return df
 
-def get_model():
-#    return LogisticRegression()
-#    return svm.SVC()
-#    return GradientBoostingClassifier(n_estimators=200, max_depth=4,learning_rate=.05)
-    #best has occured at 0.05 and 400
-    return xgb.XGBClassifier(learning_rate=.05, n_estimators=400, max_depth=4, subsample=.9)
-#    return RandomForestClassifier(n_estimators=200)
-#    return ExtraTreesClassifier()
 
 
 
@@ -77,18 +69,18 @@ def testing(model, X,ids):
 
 def metric(X,y):
     # evaluate the model by splitting into train and test sets
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=0)
-    model2 = get_model()
-    model2.fit(X_train, y_train)
+#    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=0)
+    # model2 = get_model()
+    # model2.fit(X_train, y_train)
 
-    # predict class labels for the test set
-    predicted = model2.predict(X_test)
-    print 'predicted = %s' %(predicted)
+    # # predict class labels for the test set
+    # predicted = model2.predict(X_test)
+    # print 'predicted = %s' %(predicted)
 
     # generate evaluation metrics
-    print 'metrics.accuracy_score(y_test, predicted) = %s' %(metrics.accuracy_score(y_test, predicted))
+ #   print 'metrics.accuracy_score(y_test, predicted) = %s' %(metrics.accuracy_score(y_test, predicted))
     #evaluate the model using 10-fold cross-validation
-    scores = cross_val_score(get_model(), X, y, scoring='accuracy', cv=3)
+    scores = cross_val_score(get_model(), X, y, scoring='accuracy', cv=3, verbose=3)
     print 'cross_val_score = %s' %(scores)
     print 'cross val average ', np.mean(scores)
 
@@ -106,10 +98,46 @@ def get_features(df) :
     features =  ['region=8.0', 'income=0','region=3.0','region=6.0','n_ebony','income','education=primary','education=MBA','age=18-24','age=55+','age=35-45','age=45-55','age=25-35','home','married','s_tokugawa','d_tokugawa','s_odyssey','d_odyssey','s_centaur','d_centaur','h_size','n_unique_p','d_ebony','d_cosmos','politics','s_ebony','p_voted','s_cosmos','r_years','n_tokugawa','n_rallies','previous_vote=TOKUGAWA','n_centaur','n_odyssey','previous_vote=EBONY','n_cosmos','previous_vote=ODYSSEY','previous_vote=CENTAUR','previous_vote=COSMOS']
     return df[features]
 
+def get_model():
+#    return LogisticRegression()
+#    return svm.SVC()
+#    return GradientBoostingClassifier(n_estimators=200, max_depth=4,learning_rate=.05)
+    #best has occured at 0.05 and 400
+    return xgb.XGBClassifier(n_estimators=400, subsample=0.9, colsample_bytree=0.9, learning_rate=0.05, max_depth=4)
+#    return RandomForestClassifier(n_estimators=200)
+#    return ExtraTreesClassifier()
+
+def grid_search(X,y):
+    parameters = {
+        'n_estimators': [400],
+        'learning_rate': [0.005, 0.01],
+        'max_depth': [3, 4, 5],
+        'subsample': [0.9, 1.0],
+        'colsample_bytree': [0.9, 1.0],
+    }
+    model = GridSearchCV(get_model(), parameters, verbose=3)
+    model.fit(X,y)
+    best_parameters, score, _ = max(model.grid_scores_, key=lambda x: x[1])
+    print(score)
+    for param_name in sorted(best_parameters.keys()):
+        print("%s: %r" % (param_name, best_parameters[param_name]))
+
+def random_search(X,y):
+    parameters = {'max_depth': [4], 'n_estimators': [400], 'learning_rate' : [.05], 'subsample': uniform(loc=0.6,scale=0.39), 'colsample_bytree':uniform(loc=0.6,scale=0.39)}
+    model = RandomizedSearchCV(get_model(), parameters, verbose=3)
+    model.fit(X,y)
+    print(model.best_score_)
+    print(model.best_params_)
+    print(model.best_estimator_)
+    best_parameters, score, _ = max(model.grid_scores_, key=lambda x: x[1])
+    print(score)
+    for param_name in sorted(best_parameters.keys()):
+        print("%s: %r" % (param_name, best_parameters[param_name]))
+     
+
 df = pd.read_csv('training.csv')
     #Set columns to readable names
 df.columns = ['Citizen_ID', 'actual_vote', 'previous_vote', 'd_centaur', 'd_ebony', 'd_tokugawa', 'd_odyssey', 'd_cosmos', 's_centaur', 's_ebony', 's_tokugawa', 's_cosmos', 's_odyssey', 'occ', 'region', 'h_size', 'age', 'married', 'home', 'politics', 'r_years', 'p_voted', 'n_unique_p', 'education', 'n_centaur', 'n_ebony', 'n_tokugawa', 'n_odyssey', 'n_rallies', 'n_cosmos', 'docs', 'income']
-
 df['actual_vote'] = df['actual_vote'].astype('category')
 categories = df['actual_vote'].cat.categories
 df['actual_vote'] = df['actual_vote'].cat.rename_categories(np.arange(5))
@@ -137,13 +165,16 @@ print 'X.shape = %s  y.shape = %s' %(X.shape,y.shape)
 
 y = y.ravel()
 model = get_model()
-model = model.fit(X, y)
+model = model.fit(X,y)
 print model.score(X, y)
 
 # print model.feature_importances_
 # print len(model.feature_importances_)
 # print sorted(zip(model.feature_importances_, X.columns.ravel()))
 
+
+
+#random_search(X,y)
 metric(X,y)
 testing(model, X_test,ids)
 
