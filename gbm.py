@@ -13,10 +13,46 @@ import xgboost as xgb
 from sklearn.decomposition import PCA
 from sklearn import svm
 from sklearn.ensemble import GradientBoostingClassifier
+from sklearn.ensemble import AdaBoostClassifier
 from sklearn.linear_model import RidgeClassifier
 import pickle
 from sklearn.grid_search import GridSearchCV, RandomizedSearchCV
 from scipy.stats import uniform
+from sklearn.decomposition import TruncatedSVD
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import Pipeline
+from sklearn.base import TransformerMixin
+from sklearn.base import BaseEstimator
+from sklearn.pipeline import FeatureUnion
+
+from lasagne.layers import DenseLayer
+from lasagne.layers import InputLayer
+from lasagne.layers import DropoutLayer
+from lasagne.nonlinearities import softmax
+from lasagne.updates import nesterov_momentum
+from nolearn.lasagne import NeuralNet
+
+import itertools
+class RidgeTransformer(BaseEstimator, TransformerMixin):
+
+
+    def fit(self, X, y=None, **fit_args):
+        self.classifier = RidgeClassifier().fit(X,y)
+        return self
+    
+    def transform(self, X):
+        return self.classifier.decision_function(X)
+class IdempotentTransformer(BaseEstimator, TransformerMixin):
+
+
+    def fit(self, X, y=None, **fit_args):
+        return self
+    
+    def transform(self, X):
+        return X
+
+
+    
 def encode_onehot(df, cols):
     """
     One-hot encoding is applied to columns specified in a pandas DataFrame.
@@ -45,24 +81,68 @@ def encode_onehot(df, cols):
 
 def preprocess(df):
 
+
     df = df.fillna(0)
 
-#    df = df.set_index('Citizen_ID')
+
+    #    df['previous_vote'] = df['previous_vote'].astype('category')    
+    
+    #    df = df.set_index('Citizen_ID')
     for column in ['d_centaur', 'd_ebony', 'd_tokugawa', 'd_odyssey', 'd_cosmos']:
         df[column] = df[column].str.rstrip().str.replace(',','').str.replace('$','').astype(int)
     #Convert to  string as DictVectorizer requires strings
     df['region'] = df['region'].astype(str)
     one_hot = ['age', 'previous_vote', 'education', 'region','occ']
+    #=    df['previous_vote'] = df['previous_vote'].cat.rename_categories(np.arange(5))
     df = encode_onehot(df, one_hot)
 
+    # rally_columns = ['n_centaur', 'n_ebony', 'n_tokugawa', 'n_odyssey', 'n_cosmos']
+    # for c in itertools.combinations(rally_columns, 2):
+    #     df[c[0]+'-'+c[1]] = (df[c[0]] - df[c[1]] )
 
-    #Remove $ and ,    
+    n_sum = df['n_ebony']+ df['n_tokugawa'] + df['n_odyssey'] + df['n_cosmos']
+    df['n_centaur_wrong'] = (df['n_rallies'] != (n_sum + df['n_centaur'])).astype(int)
+    df['n_centaur'] = df['n_rallies']  - n_sum
+
+      #Remove $ and ,    
     return df
 
+def get_previous(instance):
+    for i, c in enumerate(categories):
+        if instance['previous_vote='+c]:
+            return i
 
 
+def drange(start, stop, step):
+     r = start
+     while r < stop:
+     	 yield r
+     	 r += step        
+    
+def get_predicted(probs, alpha, instance):
+    max_index = -1
+    max_prob = 0
+    previous = get_previous(instance)
+    for i,p in enumerate(probs):
+        if max_prob < p:
+            max_index = i
+            max_prob = p
+    probs = sorted(zip(probs, np.arange(0,5)))
+    if probs[-1][1] == previous:
+        if probs[-1][0] * alpha > probs[-2][0]:
+            return previous
+        else:
+            
+            return probs[-2][1]
+    else:
+        return probs[-1][1]
+    
+    
 
-def testing(model, X,ids):
+
+def testing(model, X,ids,categories):
+#    probs = model.predict_proba(X)
+#    t = [get_predicted(probs[i], .99, X.iloc[i]) for i in range(len(probs))]
     t = model.predict(X)
     t = [categories[i] for i in t]
     pd.DataFrame({'y': t},index=ids).to_csv('alpha_kappa_iit_kgp_3.csv')
@@ -98,22 +178,57 @@ def get_features(df) :
     features =  ['region=8.0', 'income=0','region=3.0','region=6.0','n_ebony','income','education=primary','education=MBA','age=18-24','age=55+','age=35-45','age=45-55','age=25-35','home','married','s_tokugawa','d_tokugawa','s_odyssey','d_odyssey','s_centaur','d_centaur','h_size','n_unique_p','d_ebony','d_cosmos','politics','s_ebony','p_voted','s_cosmos','r_years','n_tokugawa','n_rallies','previous_vote=TOKUGAWA','n_centaur','n_odyssey','previous_vote=EBONY','n_cosmos','previous_vote=ODYSSEY','previous_vote=CENTAUR','previous_vote=COSMOS']
     return df[features]
 
+def create_nn(X):
+    
+    layers0 = [('input', InputLayer),
+               ('dense0', DenseLayer),
+               ('dropout', DropoutLayer),
+               ('dense1', DenseLayer),
+               ('output', DenseLayer)]
+    num_classes = 5
+    num_features = X.shape[1]    
+    net0 = NeuralNet(layers=layers0,
+                 
+                 input_shape=(None, num_features),
+                 dense0_num_units=200,
+                 dropout_p=0.5,
+                 dense1_num_units=200,
+                 output_num_units=num_classes,
+                 output_nonlinearity=softmax,
+                 
+                 update=nesterov_momentum,
+                 update_learning_rate=0.01,
+                 update_momentum=0.9,
+                 
+                 eval_size=0.2,
+                 verbose=1)
+
+    return net0
 def get_model():
-#    return LogisticRegression()
+
+    #    return LogisticRegression()
 #    return svm.SVC()
 #    return GradientBoostingClassifier(n_estimators=200, max_depth=4,learning_rate=.05)
     #best has occured at 0.05 and 400
-    return xgb.XGBClassifier(n_estimators=400, subsample=0.9, colsample_bytree=0.9, learning_rate=0.05, max_depth=4)
+#    return
+#    xgb.XGBClassifier(n_estimators=400, subsample=0.9, colsample_bytree=0.9, learning_rate=0.05, max_depth=4), verbose=3, n_estimators=1)
+
+#    combined_features = FeatureUnion([ ('idemp',IdempotentTransformer()),('ridge', RidgeTransformer())])
+#    print combined_features.fit_transform(X,y).shape
+#    return Pipeline([ ('scale', StandardScaler()),('gbm',  xgb.XGBClassifier(n_estimators=400, subsample=0.9, colsample_bytree=0.9, learning_rate=0.05, max_depth=4))])
+#    return create_nn(X)
+#    return LogisticRegression()
+#    return RidgeClassifier()
+#    return AdaBoostClassifier(xgb.XGBClassifier(n_estimators=400, subsample=0.9, colsample_bytree=0.9, learning_rate=0.05, max_depth=6)
+#    return AdaBoostClassifier()
+    return svm.SVC(gamma=2, C=1, verbose=3)
+ #   return BaggingClassifier(verbose=3)
 #    return RandomForestClassifier(n_estimators=200)
 #    return ExtraTreesClassifier()
 
 def grid_search(X,y):
     parameters = {
-        'n_estimators': [400],
-        'learning_rate': [0.005, 0.01],
-        'max_depth': [3, 4, 5],
-        'subsample': [0.9, 1.0],
-        'colsample_bytree': [0.9, 1.0],
+        'gamma': np.arange(0,.2,.03)
     }
     model = GridSearchCV(get_model(), parameters, verbose=3)
     model.fit(X,y)
@@ -123,7 +238,7 @@ def grid_search(X,y):
         print("%s: %r" % (param_name, best_parameters[param_name]))
 
 def random_search(X,y):
-    parameters = {'max_depth': [4], 'n_estimators': [400], 'learning_rate' : [.05], 'subsample': uniform(loc=0.6,scale=0.39), 'colsample_bytree':uniform(loc=0.6,scale=0.39)}
+    parameters = {'gamma':uniform(loc=0,scale=0.99)}
     model = RandomizedSearchCV(get_model(), parameters, verbose=3)
     model.fit(X,y)
     print(model.best_score_)
@@ -133,48 +248,62 @@ def random_search(X,y):
     print(score)
     for param_name in sorted(best_parameters.keys()):
         print("%s: %r" % (param_name, best_parameters[param_name]))
-     
 
-df = pd.read_csv('training.csv')
-    #Set columns to readable names
-df.columns = ['Citizen_ID', 'actual_vote', 'previous_vote', 'd_centaur', 'd_ebony', 'd_tokugawa', 'd_odyssey', 'd_cosmos', 's_centaur', 's_ebony', 's_tokugawa', 's_cosmos', 's_odyssey', 'occ', 'region', 'h_size', 'age', 'married', 'home', 'politics', 'r_years', 'p_voted', 'n_unique_p', 'education', 'n_centaur', 'n_ebony', 'n_tokugawa', 'n_odyssey', 'n_rallies', 'n_cosmos', 'docs', 'income']
-df['actual_vote'] = df['actual_vote'].astype('category')
-categories = df['actual_vote'].cat.categories
-df['actual_vote'] = df['actual_vote'].cat.rename_categories(np.arange(5))
-y = df['actual_vote']
-del df['actual_vote']
+def read_data():
+    df = pd.read_csv('training.csv')
+        #Set columns to readable names
+    df.columns = ['Citizen_ID', 'actual_vote', 'previous_vote', 'd_centaur', 'd_ebony', 'd_tokugawa', 'd_odyssey', 'd_cosmos', 's_centaur', 's_ebony', 's_tokugawa', 's_cosmos', 's_odyssey', 'occ', 'region', 'h_size', 'age', 'married', 'home', 'politics', 'r_years', 'p_voted', 'n_unique_p', 'education', 'n_centaur', 'n_ebony', 'n_tokugawa', 'n_odyssey', 'n_rallies', 'n_cosmos', 'docs', 'income']
+    df['actual_vote'] = df['actual_vote'].astype('category')
+    categories = df['actual_vote'].cat.categories
+    print categories
+    df['actual_vote'] = df['actual_vote'].cat.rename_categories(np.arange(5))
+    y = df['actual_vote']
+    del df['actual_vote']
 
-tf = pd.read_csv('testing.csv')
-tf.columns = ['Citizen_ID', 'previous_vote', 'd_centaur', 'd_ebony', 'd_tokugawa', 'd_odyssey', 'd_cosmos', 's_centaur', 's_ebony', 's_tokugawa', 's_cosmos', 's_odyssey', 'occ', 'region', 'h_size', 'age', 'married', 'home', 'politics', 'r_years', 'p_voted', 'n_unique_p', 'education', 'n_centaur', 'n_ebony', 'n_tokugawa', 'n_odyssey', 'n_rallies', 'n_cosmos', 'docs', 'income']
-len_df = len(df)
-len_tf = len(tf)
-ids = tf['Citizen_ID']
-df = pd.concat([df, tf],ignore_index = True)
-df = preprocess(df)
-X = drop_features(df)
-X_test = X[len_df:]
-X = X[:len_df]
-print 'X_test.shape = %s  ids.shape = %s' %(X_test.shape,ids.shape)
-print 'X.shape = %s  y.shape = %s' %(X.shape,y.shape)
-# feat = SelectKBest(f_classif, k=40).fit(X, y.ravel())
-# X = feat.transform(X)
-# X_test = feat.transform(X_test)
-#feat = PCA().fit(X)
-#X = feat.transform(X)
-#X_test = feat.transform(X_test)
+    tf = pd.read_csv('testing.csv')
+    tf.columns = ['Citizen_ID', 'previous_vote', 'd_centaur', 'd_ebony', 'd_tokugawa', 'd_odyssey', 'd_cosmos', 's_centaur', 's_ebony', 's_tokugawa', 's_cosmos', 's_odyssey', 'occ', 'region', 'h_size', 'age', 'married', 'home', 'politics', 'r_years', 'p_voted', 'n_unique_p', 'education', 'n_centaur', 'n_ebony', 'n_tokugawa', 'n_odyssey', 'n_rallies', 'n_cosmos', 'docs', 'income']
+    len_df = len(df)
+    len_tf = len(tf)
+    ids = tf['Citizen_ID']
+    df = pd.concat([df, tf],ignore_index = True)
+    df = preprocess(df)
+    X = drop_features(df)
+    X_test = X[len_df:]
+    X = X[:len_df]
+    print 'X_test.shape = %s  ids.shape = %s' %(X_test.shape,ids.shape)
+    print 'X.shape = %s  y.shape = %s' %(X.shape,y.shape)
 
-y = y.ravel()
-model = get_model()
-model = model.fit(X,y)
-print model.score(X, y)
+    return X, y, X_test, ids, categories
 
-# print model.feature_importances_
-# print len(model.feature_importances_)
-# print sorted(zip(model.feature_importances_, X.columns.ravel()))
+def main():
+    X, y, X_test, ids, categories = read_data()
+    feat = SelectKBest(f_classif, k=45).fit(X, y.ravel())
+    X = feat.transform(X)
+    X_test = feat.transform(X_test)
+    #feat = PCA(n_components = 50).fit(X)
+    #X = feat.transform(X)
+    #X_test = feat.transform(X_test)
+
+#    X = X.values.copy()
+#    y = pd.DataFrame(y).values.copy()[:,-1 ]
+    print y.shape
+    model = get_model()
+    model = model.fit(X,y)
+    print model.score(X, y)
+    # print model.feature_importances_
+    # print len(model.feature_importances_)
+    # print sorted(zip(model.feature_importances_, X.columns.ravel()))
 
 
 
-#random_search(X,y)
-metric(X,y)
-testing(model, X_test,ids)
+    #grid_search(X,y)
+    metric(X,y)
+    testing(model, X_test,ids, categories)
+    
+if __name__ == '__main__':
+    main()
 
+
+
+
+    
