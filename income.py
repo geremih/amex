@@ -29,19 +29,19 @@ from sklearn.base import BaseEstimator
 from sklearn.pipeline import FeatureUnion
 from sklearn.ensemble import GradientBoostingClassifier, ExtraTreesClassifier, RandomForestClassifier, BaggingClassifier
 from sklearn.neighbors import KNeighborsRegressor, KNeighborsClassifier
-
-from lasagne.layers import DenseLayer
-from lasagne.layers import InputLayer
-from lasagne.layers import DropoutLayer
-from lasagne.nonlinearities import softmax
-from lasagne.updates import nesterov_momentum
-from nolearn.lasagne import NeuralNet
-from sklearn.qda import QDA
 import itertools
-from mlxtend.classifier import EnsembleClassifier
+# from lasagne.layers import DenseLayer
+# from lasagne.layers import InputLayer
+# from lasagne.layers import DropoutLayer
+# from lasagne.nonlinearities import softmax
+# from lasagne.updates import nesterov_momentum
+# from nolearn.lasagne import NeuralNet
+# from sklearn.qda import QDA
 
-from hyperopt import hp
-from hyperopt import fmin, tpe, hp, STATUS_OK, Trials
+# from mlxtend.classifier import EnsembleClassifier
+
+# from hyperopt import hp
+# from hyperopt import fmin, tpe, hp, STATUS_OK, Trials
 
 class MixedClassifier(BaseEstimator, ClassifierMixin):
     
@@ -66,12 +66,14 @@ class MixedClassifier(BaseEstimator, ClassifierMixin):
         return prob.argmax(axis=1)
 
 
-class RidgeTransformer(BaseEstimator, TransformerMixin):
+class RFTransformer(BaseEstimator, TransformerMixin):
 
 
     def fit(self, X, y=None, **fit_args):
-
-        self.classifier =         RandomForestClassifier(n_estimators=300, criterion='gini', max_features='auto', bootstrap=False, oob_score=False, n_jobs=-1, verbose=True).fit(X,y)
+        print 'Training RF'
+        rf = RandomForestClassifier(n_estimators=300, criterion='gini', max_features=12,bootstrap=True, n_jobs=-1, verbose=True)
+        self.classifier =  rf.fit(X,y)
+        print 'DONE'
         return self
     
     def transform(self, X):
@@ -92,7 +94,12 @@ class GBMTransformer(BaseEstimator, TransformerMixin):
 
 
     def fit(self, X, y=None, **fit_args):
-        self.classifier = xgb.XGBClassifier(n_estimators=400, subsample=0.9, colsample_bytree=0.9, learning_rate=0.05, max_depth=4).fit(X,y)
+        print 'Training GBM'
+        params = {'colsample_bytree': 0.6, 'n_estimators': 175.0, 'subsample': 0.6, 'learning_rate': 0.1, 'max_depth':4, 'gamma':.9}
+        params['n_estimators'] = int(    params['n_estimators'])
+        xg = xgb.XGBClassifier(**params)
+        self.classifier = xg.fit(X,y)
+        print 'DONE<'
         return self
     
     def transform(self, X):
@@ -343,18 +350,17 @@ def get_model():
 
     params = {'colsample_bytree': 0.6, 'n_estimators': 175.0, 'subsample': 0.6, 'learning_rate': 0.1, 'max_depth':4, 'gamma':.9}
     params['n_estimators'] = int(    params['n_estimators'])
-    xg = xgb.XGBClassifier(n_estimators=500, subsample=0.9, colsample_bytree=0.9, learning_rate=0.05, max_depth=4)
     xg = xgb.XGBClassifier(**params)
     rf = RandomForestClassifier(n_estimators=1500, criterion='gini', max_features=25,bootstrap=True, n_jobs=-1, verbose=True)
     lr = LogisticRegression()
     knn = KNeighborsClassifier(n_neighbors=40)
     
-    bag =  BaggingClassifier(xg, max_samples=.5, n_estimators=250)
+    bag =  BaggingClassifier(xg, max_samples=.5, n_estimators=500, verbose=3)
     ada = AdaBoostClassifier(xg)
     return bag
 
-#    combined_features = FeatureUnion([ ('trees', RidgeTransformer()), ('gt', GBMTransformer())])
-#    return Pipeline([ ('combined', combined_features),('log',LogisticRegression())])
+    #combined_features = FeatureUnion([ ('RF', RFTransformer()), ('gt', GBMTransformer())])
+    #return Pipeline([ ('combined', combined_features),('ridge',RidgeClassifier(alpha=750))])
 #    return EnsembleClassifier([xg,rf], verbose=3, voting='soft')
 #    return create_nn(X) 
 #    return LogisticRegression()
@@ -369,14 +375,16 @@ def get_model():
 #    return RandomForestClassifier(n_estimators=200)
 #    return ExtraTreesClassifier()
 
+def get_get_model(params):
+    return get_model(params)
 def grid_search(X,y):
     # parameters = {
     #     'gamma': np.arange(0,.2,.03)
     # }
     parameters = {
-        'n_estimators': np.arange(100,1001,100)
+        'alpha': np.arange(100,1001,100)
     }    
-    model = GridSearchCV(get_model(), parameters, verbose=3)
+    model = GridSearchCV(get_get_model(), parameters, verbose=3)
     model.fit(X,y)
     best_parameters, score, _ = max(model.grid_scores_, key=lambda x: x[1])
     print(score)
@@ -514,13 +522,13 @@ def main():
     # print sorted(zip(model.feature_importances_, X.columns.ravel()))
 
 
-#    hyper_optimize_rf(X,y)
-    #grid_search(X,y)
+    #    hyper_optimize_rf(X,y)
+#    grid_search(X,y)
     #    random_search(X,y)
     testing(model, X_test,ids, categories)
-    bst = model.booster()
-    bst.save_model('250.model')
-    bst.dump_model('dump.raw.txt','featmap.txt')
+    #bst = model.booster()
+    #bst.save_model('250.model')
+    #bst.dump_model('dump.raw.txt','featmap.txt')
 
 
     metric(X,y)
