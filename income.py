@@ -267,9 +267,11 @@ def get_predicted(probs, alpha, instance,categories):
 
 
 def testing(model, X,ids,categories):
-    t = model.predict(X)
+    t = model.predict_proba(X)
+    t[:,3] = 0
+    t = t.argmax(axis=1)
     t = [categories[i] for i in t]
-    pd.DataFrame({'y': t},index=ids).to_csv('alpha_kappa_iit_kgp_3.csv')
+    pd.DataFrame({'y': t},index=ids).to_csv('alpha_kappa_cow_iit_kgp_1.csv')
 
 def metric(X,y):
     # evaluate the model by splitting into train and test sets
@@ -355,7 +357,7 @@ def get_model():
     lr = LogisticRegression()
     knn = KNeighborsClassifier(n_neighbors=40)
     
-    bag =  BaggingClassifier(xg, max_samples=.5, n_estimators=500, verbose=3)
+    bag =  BaggingClassifier(xg, max_samples=.5, n_estimators=250, verbose=3)
     ada = AdaBoostClassifier(xg)
     return bag
 
@@ -375,8 +377,7 @@ def get_model():
 #    return RandomForestClassifier(n_estimators=200)
 #    return ExtraTreesClassifier()
 
-def get_get_model(params):
-    return get_model(params)
+
 def grid_search(X,y):
     # parameters = {
     #     'gamma': np.arange(0,.2,.03)
@@ -420,7 +421,7 @@ def read_data():
     y = df['actual_vote']
     del df['actual_vote']
 
-    tf = pd.read_csv('testing.csv')
+    tf = pd.read_csv('final.csv')
     tf.columns = ['Citizen_ID', 'previous_vote', 'd_centaur', 'd_ebony', 'd_tokugawa', 'd_odyssey', 'd_cosmos', 's_centaur', 's_ebony', 's_tokugawa', 's_cosmos', 's_odyssey', 'occ', 'region', 'h_size', 'age', 'married', 'home', 'politics', 'r_years', 'p_voted', 'n_unique_p', 'education', 'n_centaur', 'n_ebony', 'n_tokugawa', 'n_odyssey', 'n_rallies', 'n_cosmos', 'docs', 'income']
     len_df = len(df)
     len_tf = len(tf)
@@ -498,7 +499,8 @@ def hyper_optimize_rf(X,y):
     print best
     return trials
 
-    
+
+
 def main():
     X, y, X_test, ids, categories = read_data()
 #    feat = SelectKBest(f_classif, k=100).fit(X, y.ravel())
